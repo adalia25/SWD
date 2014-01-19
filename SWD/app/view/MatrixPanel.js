@@ -28,6 +28,10 @@ Ext.define('swd.view.MatrixPanel', {
 		return this.matrix;
 	},
 	
+	isMatrixCoherent: function() {
+		return this.isCoherent;
+	},
+	
 	getPrefVector: function() {
 		return this.vector;
 	},
@@ -41,10 +45,11 @@ Ext.define('swd.view.MatrixPanel', {
 				{ title: 'Macierz', name: 'Matrix', obj: matrix, editable: true },
 				{ title: 'Znorm.', name: 'Matrix', obj: normalized },
 				{ title: 'Wektor', name: 'Vector', obj: vector }
-			],
-			isCoherent = normalized.isCoherent();
+			];
+			
+		me.isCoherent = normalized.isCoherent();
 		
-		if (!isCoherent) {
+		if (!me.isCoherent) {
 			tabs[0].title = '<span class="swd-notcoherent-matrix" data-qtip="Brak spójności">'+tabs[0].title+'</span>';
 		}
 		

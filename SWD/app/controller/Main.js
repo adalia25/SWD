@@ -68,7 +68,8 @@ Ext.define('swd.controller.Main', {
 	loadData: function(data) {
 		var me = this,
 			panel = me.getMainView(),
-			vectors = [],
+			vectors = [],		// Tablica wektorow
+			coherentCnt = 0,	// Licznik spojnych macierzy
 			view,
 			container,
 			ahp;
@@ -89,6 +90,8 @@ Ext.define('swd.controller.Main', {
 			panel.add(view);
 			// Zapisujemy sobie wektor
 			vectors[0] = view.getPrefVector();
+			// Jezeli macierz spojna to zwiekszamy
+			coherentCnt += view.isMatrixCoherent() ? 1 : 0;
 			
 			// Tworzymy kontener na widoki porownan
 			container = Ext.create('Ext.container.Container', {
@@ -109,6 +112,8 @@ Ext.define('swd.controller.Main', {
 				// Dodajemy go do kontenera
 				container.add(view);
 				vectors[i+1] = view.getPrefVector();
+				// Jezeli macierz spojna to zwiekszamy
+				coherentCnt += view.isMatrixCoherent() ? 1 : 0;
 			});
 			
 			// Tworzymy kontener na widok rankingu
@@ -117,6 +122,10 @@ Ext.define('swd.controller.Main', {
 			});
 			// Dodajemy go do widoku glownego
 			panel.add(container);
+			
+			if (coherentCnt !== vectors.length) {
+				Ext.Error.raise("Przynajmniej jedna macierz jest niespójna.");
+			}
 			
 			// Tworzymy obiekt AHP, wykorzystamy go w dwoch widokach
 			ahp = me.createAHP(vectors);
