@@ -1,0 +1,11 @@
+.swd-notcoherent-matrix {
+	color: red;
+}
+
+.swd-background {
+	background: url('../images/logistyka.png');
+	background-color: #99bce8;
+	background-repeat: no-repeat;
+	background-position-x: 100%;
+	background-position-y: 100%;
+}
