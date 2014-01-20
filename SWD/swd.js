@@ -44,6 +44,13 @@ Ext.application({
 									});
 								}
 							}
+						},
+						'|',
+						{
+							xtype: 'button',
+							name: 'calculate',
+							text: 'Wylicz',
+							disabled: true
 						}
 					]
 				}

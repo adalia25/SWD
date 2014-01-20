@@ -41,39 +41,124 @@ Ext.define('swd.view.MatrixPanel', {
 			matrix = me.matrix,
 			normalized = matrix.getNormalized(),
 			vector = normalized.getPrefVector(),
-			tabs = [
-				{ title: 'Macierz', name: 'Matrix', obj: matrix, editable: true },
-				{ title: 'Znorm.', name: 'Matrix', obj: normalized },
-				{ title: 'Wektor', name: 'Vector', obj: vector }
+			grids = [
+				{ title: 'Macierz', id: 'Matrix', obj: matrix, editable: true },
+				{ title: 'Znorm.', id: 'Matrix', obj: normalized },
+				{ title: 'Wektor', id: 'Vector', obj: vector }
 			];
 			
 		me.isCoherent = normalized.isCoherent();
 		
 		if (!me.isCoherent) {
-			tabs[0].title = '<span class="swd-notcoherent-matrix" data-qtip="Brak spójności">'+tabs[0].title+'</span>';
+			grids[0].title = me.getNotCoherentText(grids[0].title);
 		}
 		
-		me.items = [];
 		me.vector = vector;
+		me.items = me.getItemsConfig(grids);
 		
-		Ext.Array.forEach(tabs, function(tab) {
-			me.items.push({
+		me.callParent(arguments);
+	},
+	
+	getItemsConfig: function(grids) {
+		var me = this,
+				items = [];
+		
+		Ext.Array.forEach(grids, function(grid) {
+			var object = grid.obj,	// To bedzie macierz, macierz normalna lub wektor
+					id = grid.id,
+					config = {};
+			
+			Ext.apply(config, {
 				xtype: 'grid',
-				title: tab.title,
-				store: me['get'+tab.name+'StoreConfig'].call(me, tab.obj),
-				columns: me['get'+tab.name+'ColumnsConfig'].call(me, tab.obj, tab.editable),
+				title: grid.title,
+				// Na podstawie "id" budujemy nazwe metody do pobrania konfigu store'a
+				// oraz konfigu kolumn
+				store: me['get'+id+'StoreConfig'].call(me, object),
+				columns: me['get'+id+'ColumnsConfig'].call(me, object, grid.editable),
 				viewConfig: {
 					trackOver: false
 				},
-				plugins: [
-					{ ptype: 'cellediting', pluginId: 'cellediting' }
-				],
 				hideHeaders: true,
 				columnLines: true
 			});
+			
+			// Plugin do edycji dodajemy tylko dla macierzy wejsciowej
+			if (grid.editable) {
+				Ext.apply(config, {
+					plugins: [
+						{ 
+							ptype: 'cellediting', pluginId: 'cellediting',
+							listeners: {
+								edit: me.onEditMatrix,
+								scope: me
+							}
+						}
+					]
+				});
+			}
+			
+			items.push(config);
 		});
 		
-		me.callParent(arguments);
+		return items;
+	},
+	
+	onEditMatrix: function(plugi, context) {
+		var me = this,
+				j = context.rowIdx,										// Indeks edytoeanego wiersza
+				l = context.colIdx,										// Indeks edytowanej columny
+				panel = context.grid.up('tabpanel'),	// Referencja to panelu z zakladkami
+				tabBar = panel.down('tabbar'),				// Referencja do paska zakladek
+				matrixTab = tabBar.items.getAt(0),		// Referencja do pierwszej zakladki - macierz wejsciowa
+				text = 'Macierz',
+				grids,
+				normalized,
+				vector;
+		
+		// Modyfikujemy dane w macierzy
+		me.matrix.items[j][l] = context.value;
+		
+		normalized = me.matrix.getNormalized();
+		vector = normalized.getPrefVector(),
+		grids = [
+			{ title: 'Znorm.', id: 'Matrix', obj: normalized },
+			{ title: 'Wektor', id: 'Vector', obj: vector }
+		];
+		
+		// Wylaczamy odswierzanie strony
+		Ext.suspendLayouts();
+		
+		// Usuwamy zakladke z macierza znormalizowana i wektorem
+		panel.remove(panel.items.getAt(1));
+		panel.remove(panel.items.getAt(1));
+		// Dodajemy zakladki z nowo wygenerowana macierza znormalizowana
+		// oraz wektorem
+		panel.add(me.getItemsConfig(grids));
+		
+		// Aktualizujemy informacje o spojnosci oraz
+		// nowy wektor
+		me.isCoherent = normalized.isCoherent();
+		me.vector = vector;
+		
+		// Sprawdzamy czy maciez po zmianach jest spojna, jezeli tak,
+		// to zmieniamy kolor opisu zakladki oraz zatwierdzamy zmiany
+		if (me.isCoherent) {
+			matrixTab.setText(text);
+			context.record.commit();
+		} else {
+			matrixTab.setText(me.getNotCoherentText(text));
+		}
+		
+		// Odswierzamy strone po zmianach
+		Ext.resumeLayouts(true);
+		
+		// Wysylamy zdarzenie 'matrixchange' aby powiadomic o zmianach
+		// i umozliwic obliczenia
+		me.fireEvent('matrixchange', me);
+	},
+	
+	getNotCoherentText: function(text) {
+		return '<span class="swd-notcoherent-matrix" data-qtip="Brak spójności">'+text+'</span>';
 	},
 	
 	getMatrixStoreConfig: function(matrix) {

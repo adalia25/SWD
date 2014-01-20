@@ -8,11 +8,13 @@ Ext.define('swd.controller.Main', {
 	views: [
 		'MatrixPanel',
 		'RatingPanel',
-		'ChartPanel'
+		'ChartPanel',
+		'AnswerPanel'
 	],
 	
 	refs: [
-		{ ref: 'SaveBtn', selector: 'viewport > panel button[name=save]' }
+		{ ref: 'SaveBtn', selector: 'viewport > panel button[name=save]' },
+		{ ref: 'CalculateBtn', selector: 'viewport > panel button[name=calculate]' }
 	],
 	
 	
@@ -20,8 +22,14 @@ Ext.define('swd.controller.Main', {
 		var me = this;
 		
 		me.control({
+			'viewport > panel': {
+				afterrender: me.onCreateMainView
+			},
 			'viewport > panel button[name=load]': {
 				change: me.onChangeFile
+			},
+			'viewport > panel button[name=calculate]': {
+				click: me.onClickCalculate
 			}
 		});
 		
@@ -29,6 +37,48 @@ Ext.define('swd.controller.Main', {
 	
 	getMainView: function() {
 		return Ext.ComponentQuery.query('viewport > panel')[0];
+	},
+	
+	onCreateMainView: function(view) {
+		var me = this;
+		me.mon(view, {
+			add: me.onAddComponentToMainView,
+			remove: me.onRemoveComponentFromMainView,
+			scope: me
+		});
+	},
+	
+	onAddComponentToMainView: function(view, component) {
+		var me = this;
+		if (component instanceof me.getView('MatrixPanel')) {
+			component.on('matrixchange', me.onMatrixChange, me);
+		}
+	},
+	
+	onRemoveComponentFromMainView: function(view, component) {
+		var me = this;
+		if (component instanceof me.getView('MatrixPanel')) {
+			component.un('matrixchange', me.onMatrixChange, me);
+		}
+	},
+	
+	onMatrixChange: function() {
+		var me = this,
+				panel = me.getMainView(),
+				views = panel.query('matrixpanel'),
+				btn = me.getCalculateBtn(),
+				coherentCnt = 0;
+				
+			// Liczymy spojne macierze
+			Ext.Array.forEach(views, function(matrixPanel) {
+				if (matrixPanel.isCoherent) {
+					coherentCnt++;
+				}
+			});
+			
+			// Wylaczamy przycisk "Wylicz" w przypadku gdy przynajmniej jedna
+			// macierz jest niespojna
+			btn.setDisabled(coherentCnt !== views.length);
 	},
 	
 	onChangeFile: function(btn, ev) {
@@ -60,6 +110,46 @@ Ext.define('swd.controller.Main', {
 		reader.readAsText(file);
 	},
 	
+	onClickCalculate: function() {
+		var me = this,
+				panel = me.getMainView(),
+				vectors = [];
+				
+		try {
+			
+			// Wylaczamy odswierzanie strony
+			Ext.suspendLayouts();
+			
+			// Usuwamy poprzednie widoki resultatow
+			me.clearResult();
+			
+			// Sprawdzamy czy wszystkie macierze sa spojne, jezeli nie
+			// to generujemy wyjatek
+			// Dodatkowo wypelniamy tablice wektorow
+			Ext.Array.forEach(panel.query('matrixpanel'), function(matrixPanel) {
+				if (!matrixPanel.isCoherent) {
+					Ext.Error.raise('Przynajmniej jedna macierz jest niespójna.');
+				}
+				vectors.push(matrixPanel.getPrefVector());
+			});
+			
+			// Generujemy widoki dla wynikow obliczen
+			me.createResult(vectors);
+			
+		} catch (e) {
+			Ext.Msg.show({
+				title: 'Błąd',
+				msg: e.message,
+				buttons: Ext.Msg.OK,
+				icon: Ext.Msg.ERROR
+			});
+		} finally {
+			// Odswierzamy strone
+			Ext.resumeLayouts(true);
+		}
+		
+	},
+	
 	clearData: function() {
 		var panel = this.getMainView();
 		panel.removeAll();
@@ -67,15 +157,21 @@ Ext.define('swd.controller.Main', {
 	
 	loadData: function(data) {
 		var me = this,
-			panel = me.getMainView(),
-			vectors = [],		// Tablica wektorow
-			coherentCnt = 0,	// Licznik spojnych macierzy
-			view,
-			container,
-			ahp;
+				panel = me.getMainView(),
+				vectors = [],			// Tablica wektorow
+				coherentCnt = 0,	// Licznik spojnych macierzy
+				view,
+				container;
+		
+		// Przechowujemy sobie wczytane dane
+		me.data = data;
 		
 		try {
 			
+			// Wylaczamy odswierzanie strony
+			Ext.suspendLayouts();
+			
+			// Usuwamy wszystkie poprzedio wygenerowane widoki
 			me.clearData();
 			
 			// Tworzymy widok dla macierzy preferencji
@@ -95,7 +191,8 @@ Ext.define('swd.controller.Main', {
 			
 			// Tworzymy kontener na widoki porownan
 			container = Ext.create('Ext.container.Container', {
-				layout: 'hbox'
+				layout: 'hbox',
+				bubbleEvents: ['add', 'remove']
 			});
 			// Dodajemy go do widoku glownego
 			panel.add(container);
@@ -116,43 +213,12 @@ Ext.define('swd.controller.Main', {
 				coherentCnt += view.isMatrixCoherent() ? 1 : 0;
 			});
 			
-			// Tworzymy kontener na widok rankingu
-			container = Ext.create('Ext.container.Container', {
-				layout: 'hbox'
-			});
-			// Dodajemy go do widoku glownego
-			panel.add(container);
-			
 			if (coherentCnt !== vectors.length) {
 				Ext.Error.raise("Przynajmniej jedna macierz jest niespójna.");
 			}
 			
-			// Tworzymy obiekt AHP, wykorzystamy go w dwoch widokach
-			ahp = me.createAHP(vectors);
-			
-			// Tworzymy widok dla wektora rankingu
-			view = me.getView('RatingPanel').create({
-				title: 'Ranking',
-				width: 250,
-				height: 250,
-				margin: 5,
-				decision: data.decision,
-				ahp: ahp
-			});
-			// Dodajemy go do kontenera
-			container.add(view);
-			
-			// Tworzymy widok dla wykresu rankingu
-			view = me.getView('ChartPanel').create({
-				title: 'Wykres',
-				width: 250,
-				height: 250,
-				margin: 5,
-				decision: data.decision,
-				ahp: ahp
-			});
-			// Dodajemy go do kontenera
-			container.add(view);
+			// Generujemy widoki dla wynikow obliczen
+			me.createResult(vectors);
 			
 		} catch (e) {
 			Ext.Msg.show({
@@ -161,6 +227,9 @@ Ext.define('swd.controller.Main', {
 				buttons: Ext.Msg.OK,
 				icon: Ext.Msg.ERROR
 			});
+		} finally {
+			// Odswierzamy strone
+			Ext.resumeLayouts(true);
 		}
 	},
 	
@@ -174,6 +243,71 @@ Ext.define('swd.controller.Main', {
 		return new swd.util.AHP({
 			vectors: items
 		});
+	},
+	
+	clearResult: function() {
+		var me = this,
+				panel = me.getMainView(),
+				container = panel.query('container[name=results]');
+		if (!Ext.isEmpty(container)) {
+			panel.remove(container);
+		}
+	},
+	
+	createResult: function(vectors) {
+		var me = this,
+				data = me.data,
+				panel = me.getMainView(),
+				view,
+				container,
+				ahp;
+		
+		// Tworzymy obiekt AHP, wykorzystamy go w dwoch widokach
+		ahp = me.createAHP(vectors);
+		
+		// Tworzymy kontener na widok rankingu
+		container = Ext.create('Ext.container.Container', {
+			layout: 'hbox',
+			name: 'results'
+		});
+		// Dodajemy go do widoku glownego
+		panel.insert(2, container);
+		
+		// Tworzymy widok dla wektora rankingu
+		view = me.getView('RatingPanel').create({
+			title: 'Ranking',
+			width: 250,
+			height: 250,
+			margin: 5,
+			decision: data.decision,
+			ahp: ahp
+		});
+		// Dodajemy go do kontenera
+		container.add(view);
+		
+		// Tworzymy widok dla wykresu rankingu
+		view = me.getView('ChartPanel').create({
+			title: 'Wykres',
+			width: 250,
+			height: 250,
+			margin: 5,
+			decision: data.decision,
+			ahp: ahp
+		});
+		// Dodajemy go do kontenera
+		container.add(view);
+
+		// Tworzymy widok dla odpowiedzi
+		view = me.getView('AnswerPanel').create({
+			title: 'Odpowiedz',
+			width: 250,
+			height: 250,
+			margin: 5,
+			decision: data.decision,
+			ahp: ahp
+		});
+		// Dodajemy go do kontenera
+		container.add(view);
 	}
 	
 });
