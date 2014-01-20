@@ -17,8 +17,11 @@ Ext.define('swd.view.AnswerPanel', {
 	
 	getColumnsConfig: function() {
 		var config = this.callParent();
-		// Usuwamy pierwsza kolumne czyli rownumberer
-		config.splice(0, 1);
+//		// Usuwamy pierwsza kolumne czyli rownumberer
+//		config.splice(0, 1);
+		// Zostawiamy tylko druga kolumne czyli nazwe
+		// wyboru
+		config = [config[1]];
 		return config;
 	}
 	

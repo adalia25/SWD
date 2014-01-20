@@ -299,7 +299,7 @@ Ext.define('swd.controller.Main', {
 
 		// Tworzymy widok dla odpowiedzi
 		view = me.getView('AnswerPanel').create({
-			title: 'Odpowiedz',
+			title: 'Odpowiedź',
 			width: 250,
 			height: 250,
 			margin: 5,
