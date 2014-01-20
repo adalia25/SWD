@@ -79,6 +79,9 @@ Ext.define('swd.controller.Main', {
 			// Wylaczamy przycisk "Wylicz" w przypadku gdy przynajmniej jedna
 			// macierz jest niespojna
 			btn.setDisabled(coherentCnt !== views.length);
+			
+			// Usuwamy poprzednie wyniki
+			me.clearResult();
 	},
 	
 	onChangeFile: function(btn, ev) {
@@ -158,8 +161,8 @@ Ext.define('swd.controller.Main', {
 	loadData: function(data) {
 		var me = this,
 				panel = me.getMainView(),
-				vectors = [],			// Tablica wektorow
-				coherentCnt = 0,	// Licznik spojnych macierzy
+				totalCnt = 1,			// Liczba wszystkich macierzy
+				coherentCnt = 0,	// Liczba spojnych macierzy
 				view,
 				container;
 		
@@ -184,8 +187,6 @@ Ext.define('swd.controller.Main', {
 			});
 			// Dodajemy go do widoku glownego
 			panel.add(view);
-			// Zapisujemy sobie wektor
-			vectors[0] = view.getPrefVector();
 			// Jezeli macierz spojna to zwiekszamy
 			coherentCnt += view.isMatrixCoherent() ? 1 : 0;
 			
@@ -208,18 +209,15 @@ Ext.define('swd.controller.Main', {
 				});
 				// Dodajemy go do kontenera
 				container.add(view);
-				vectors[i+1] = view.getPrefVector();
 				// Jezeli macierz spojna to zwiekszamy
 				coherentCnt += view.isMatrixCoherent() ? 1 : 0;
+				totalCnt++;
 			});
 			
-			if (coherentCnt !== vectors.length) {
+			if (coherentCnt !== totalCnt) {
 				Ext.Error.raise("Przynajmniej jedna macierz jest niespójna.");
 			}
-			
-			// Generujemy widoki dla wynikow obliczen
-			me.createResult(vectors);
-			
+
 		} catch (e) {
 			Ext.Msg.show({
 				title: 'Błąd',
@@ -230,6 +228,9 @@ Ext.define('swd.controller.Main', {
 		} finally {
 			// Odswierzamy strone
 			Ext.resumeLayouts(true);
+			
+			// Wlaczamy lub wylaczamy przycisk "Wylicz"
+			me.onMatrixChange();
 		}
 	},
 	
@@ -248,7 +249,7 @@ Ext.define('swd.controller.Main', {
 	clearResult: function() {
 		var me = this,
 				panel = me.getMainView(),
-				container = panel.query('container[name=results]');
+				container = panel.query('container[name=results]')[0];
 		if (!Ext.isEmpty(container)) {
 			panel.remove(container);
 		}
